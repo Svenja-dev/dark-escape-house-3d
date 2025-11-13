@@ -462,6 +462,29 @@
             transform: scale(0.95);
         }
 
+        /* Flashlight Button im HUD */
+        #flashlightBtn {
+            position: absolute;
+            bottom: 110px;
+            right: 30px;
+            width: 60px;
+            height: 60px;
+            background: rgba(127, 140, 141, 0.7);
+            border: 3px solid rgba(127, 140, 141, 1);
+            border-radius: 50%;
+            font-size: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: auto;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        #flashlightBtn:active {
+            transform: scale(0.95);
+        }
+
         /* ===== MEDIA QUERIES FÜR KLEINE SCREENS ===== */
         @media (max-width: 480px) {
             /* Inventar-Grid: 4 Spalten auf kleinen Screens */
@@ -630,6 +653,9 @@
 
         <!-- Interact Button rechts unten -->
         <div id="interactBtn">✋</div>
+
+        <!-- Flashlight Button rechts mitte -->
+        <div id="flashlightBtn" title="Taschenlampe">🔦</div>
     </div>
 
     <!-- Three.js r128 CDN -->
@@ -764,6 +790,9 @@
         // NPC-System
         let npcs = []; // Alle NPCs im Spiel
         let npcMoveTimers = {}; // Timer für NPC-Bewegungen
+
+        // Licht-System
+        let flashlight = null; // SpotLight
 
         // Controls
         let joystickActive = false;
@@ -1354,6 +1383,9 @@
                 // Render NPCs im Raum
                 renderNPCsInRoom(roomId);
 
+                // Check Dunkelheit
+                checkRoomDarkness(roomId);
+
                 console.log(`Raum geladen: ${roomDef.name}`);
             };
 
@@ -1442,6 +1474,13 @@
             interactBtn.addEventListener('touchstart', (e) => {
                 e.preventDefault();
                 handleInteraction();
+            });
+
+            // Flashlight Button
+            const flashlightBtn = document.getElementById('flashlightBtn');
+            flashlightBtn.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                toggleFlashlight();
             });
 
             console.log('Controls initialized');
@@ -2020,7 +2059,93 @@
         }
 
         // ==========================================
-        // 10. UI UPDATES
+        // 10. LICHT-SYSTEM
+        // ==========================================
+
+        // Erstelle Taschenlampe (SpotLight an Kamera)
+        function createFlashlight() {
+            flashlight = new THREE.SpotLight(0xFFFFAA, 1.5, 15, Math.PI / 6, 0.3, 1);
+            flashlight.position.set(0, 0, 0);
+            flashlight.target.position.set(0, 0, -1);
+            camera.add(flashlight);
+            camera.add(flashlight.target);
+            flashlight.visible = false; // Start aus
+            console.log('Flashlight created');
+        }
+
+        // Toggle Taschenlampe
+        function toggleFlashlight() {
+            // Check ob Spieler Taschenlampe hat
+            if (!gameState.inventory.includes('flashlight')) {
+                showMessage('Du hast keine Taschenlampe!', 2000);
+                return;
+            }
+
+            // Check Batterie
+            if (gameState.flashlightBattery <= 0) {
+                showMessage('Batterie leer! Brauchst neue Batterie.', 2000);
+                gameState.flashlightOn = false;
+                flashlight.visible = false;
+                updateFlashlightButton();
+                return;
+            }
+
+            // Toggle
+            gameState.flashlightOn = !gameState.flashlightOn;
+            flashlight.visible = gameState.flashlightOn;
+
+            updateFlashlightButton();
+            console.log('Flashlight:', gameState.flashlightOn ? 'ON' : 'OFF');
+        }
+
+        // Update Flashlight Button UI
+        function updateFlashlightButton() {
+            const btn = document.getElementById('flashlightBtn');
+            if (!btn) return;
+
+            if (gameState.flashlightOn) {
+                btn.textContent = '💡';
+                btn.style.background = 'rgba(255, 255, 0, 0.7)';
+                btn.style.borderColor = 'rgba(255, 255, 0, 1)';
+            } else {
+                btn.textContent = '🔦';
+                btn.style.background = 'rgba(127, 140, 141, 0.7)';
+                btn.style.borderColor = 'rgba(127, 140, 141, 1)';
+            }
+
+            // Battery Display
+            const batteryPercent = Math.floor(gameState.flashlightBattery);
+            btn.title = `Batterie: ${batteryPercent}%`;
+        }
+
+        // Update Flashlight (Batterie-Verbrauch)
+        function updateFlashlight(delta) {
+            if (gameState.flashlightOn) {
+                // Batterie verbrauchen
+                gameState.flashlightBattery -= 0.5 * delta; // 0.5% pro Sekunde
+
+                if (gameState.flashlightBattery <= 0) {
+                    gameState.flashlightBattery = 0;
+                    gameState.flashlightOn = false;
+                    flashlight.visible = false;
+                    showMessage('Taschenlampe Batterie leer!', 2000);
+                    updateFlashlightButton();
+                }
+            }
+        }
+
+        // Check ob Raum Licht benötigt
+        function checkRoomDarkness(roomId) {
+            // Keller requires Licht!
+            if (roomId === 'basement' && !gameState.flashlightOn) {
+                // Warnung
+                showMessage('Es ist zu dunkel! Schalte Taschenlampe ein.', 3000);
+                // Optional: Blockiere Bewegung oder Damage
+            }
+        }
+
+        // ==========================================
+        // 11. UI UPDATES
         // ==========================================
         function updateUI() {
             // Stats Bars
@@ -2114,6 +2239,7 @@
             // Updates
             updatePlayer(delta);
             updateStats(delta);
+            updateFlashlight(delta); // Batterie-Verbrauch
             updateUI();
             animateItems(); // Rotiere Items
             checkNPCEncounter(); // Check NPC-Begegnungen
@@ -2137,6 +2263,7 @@
             console.log('Initializing Dark Escape House...');
 
             initThree();
+            createFlashlight(); // Erstelle Taschenlampe
             setupControls();
             setupInventoryListeners();
             spawnNPCs(); // Spawn alle NPCs

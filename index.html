@@ -485,6 +485,72 @@
             transform: scale(0.95);
         }
 
+        /* ===== WIN/LOSE SCREENS ===== */
+        #gameOverScreen, #victoryScreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            z-index: 1000;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            text-align: center;
+            padding: 20px;
+        }
+
+        #gameOverScreen.active, #victoryScreen.active {
+            display: flex;
+        }
+
+        .screen-title {
+            font-size: 48px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+        }
+
+        #gameOverScreen .screen-title {
+            color: #e74c3c;
+        }
+
+        #victoryScreen .screen-title {
+            color: #2ecc71;
+        }
+
+        .screen-message {
+            font-size: 20px;
+            margin-bottom: 30px;
+            max-width: 80%;
+        }
+
+        .screen-stats {
+            font-size: 16px;
+            margin-bottom: 40px;
+            line-height: 1.8;
+        }
+
+        .restart-btn {
+            padding: 15px 40px;
+            font-size: 20px;
+            background: rgba(52, 152, 219, 0.9);
+            border: 3px solid #3498db;
+            border-radius: 10px;
+            color: #fff;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: bold;
+        }
+
+        .restart-btn:active {
+            background: rgba(52, 152, 219, 1);
+            transform: scale(0.95);
+        }
+
         /* ===== MEDIA QUERIES FÜR KLEINE SCREENS ===== */
         @media (max-width: 480px) {
             /* Inventar-Grid: 4 Spalten auf kleinen Screens */
@@ -563,6 +629,24 @@
                 height: 50px;
                 font-size: 24px;
             }
+
+            /* Win/Lose Screens kleiner */
+            .screen-title {
+                font-size: 36px;
+            }
+
+            .screen-message {
+                font-size: 16px;
+            }
+
+            .screen-stats {
+                font-size: 14px;
+            }
+
+            .restart-btn {
+                padding: 12px 30px;
+                font-size: 18px;
+            }
         }
     </style>
 </head>
@@ -602,6 +686,29 @@
             <button class="item-action-btn drop" id="itemDropBtn">Wegwerfen</button>
             <button class="item-action-btn close" id="itemCloseBtn">Schließen</button>
         </div>
+    </div>
+
+    <!-- Game Over Screen -->
+    <div id="gameOverScreen">
+        <div class="screen-title">💀 GAME OVER</div>
+        <div class="screen-message" id="gameOverMessage">Du bist gestorben</div>
+        <div class="screen-stats" id="gameOverStats">
+            Zeit überlebt: <span id="gameOverTime">00:00</span><br>
+            Items gesammelt: <span id="gameOverItems">0</span>
+        </div>
+        <button class="restart-btn" id="restartBtn">Nochmal spielen</button>
+    </div>
+
+    <!-- Victory Screen -->
+    <div id="victoryScreen">
+        <div class="screen-title">🎉 DU BIST ENTKOMMEN!</div>
+        <div class="screen-message">Glückwunsch! Du hast es geschafft!</div>
+        <div class="screen-stats" id="victoryStats">
+            Zeit: <span id="victoryTime">00:00</span><br>
+            Leben: <span id="victoryHealth">100</span>%<br>
+            Items gesammelt: <span id="victoryItems">0</span>
+        </div>
+        <button class="restart-btn" id="restartVictoryBtn">Nochmal spielen</button>
     </div>
 
     <!-- HUD -->
@@ -1622,18 +1729,48 @@
         }
 
         // ==========================================
-        // 7. WIN/LOSE CONDITIONS (Basic)
+        // 7. WIN/LOSE CONDITIONS
         // ==========================================
         function victory() {
-            showMessage('🎉 DU BIST ENTKOMMEN! Glückwunsch!', 5000);
             console.log('VICTORY!');
-            // TODO: Victory Screen in späterem Commit
+
+            // Stop Game
+            stopNPCMovement();
+
+            // Show Victory Screen
+            const screen = document.getElementById('victoryScreen');
+            const minutes = Math.floor(gameState.time / 60);
+            const seconds = Math.floor(gameState.time % 60);
+            document.getElementById('victoryTime').textContent =
+                `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            document.getElementById('victoryHealth').textContent = Math.floor(gameState.health);
+            document.getElementById('victoryItems').textContent = gameState.inventory.length;
+
+            screen.classList.add('active');
         }
 
         function gameOver(reason = 'Du bist gestorben') {
-            showMessage(`💀 GAME OVER - ${reason}`, 5000);
             console.log('GAME OVER:', reason);
-            // TODO: Game Over Screen in späterem Commit
+
+            // Stop Game
+            stopNPCMovement();
+
+            // Show Game Over Screen
+            const screen = document.getElementById('gameOverScreen');
+            document.getElementById('gameOverMessage').textContent = reason;
+            const minutes = Math.floor(gameState.time / 60);
+            const seconds = Math.floor(gameState.time % 60);
+            document.getElementById('gameOverTime').textContent =
+                `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            document.getElementById('gameOverItems').textContent = gameState.inventory.length;
+
+            screen.classList.add('active');
+        }
+
+        // Restart Game
+        function restartGame() {
+            console.log('Restarting game...');
+            location.reload(); // Einfachste Lösung für Prototyp
         }
 
         // ==========================================
@@ -2216,8 +2353,8 @@
 
             // Game Over Check
             if (gameState.health <= 0) {
-                console.log('GAME OVER - Gestorben!');
-                // TODO: Game Over Screen
+                gameOver('Du bist verhungert/verdurstet!');
+                return; // Stop weitere Updates
             }
 
             // Zeit erhöhen
@@ -2268,6 +2405,10 @@
             setupInventoryListeners();
             spawnNPCs(); // Spawn alle NPCs
             loadRoom('bedroom'); // Start im Schlafzimmer
+
+            // Restart Button Listeners
+            document.getElementById('restartBtn').addEventListener('click', restartGame);
+            document.getElementById('restartVictoryBtn').addEventListener('click', restartGame);
 
             // Hide Loading Screen
             setTimeout(() => {

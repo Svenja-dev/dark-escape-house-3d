@@ -1,0 +1,1057 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>Dark Escape House - 3D Horror Game</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            width: 100%;
+            height: 100vh;
+            overflow: hidden;
+            background: #000;
+            font-family: 'Arial', sans-serif;
+            touch-action: none;
+        }
+
+        #gameCanvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* HUD Container */
+        #hud {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        /* Stats Anzeige oben links */
+        #stats {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: #fff;
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-size: 14px;
+            line-height: 1.6;
+            min-width: 150px;
+        }
+
+        .stat-bar {
+            margin: 5px 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .stat-label {
+            min-width: 60px;
+        }
+
+        .bar-container {
+            flex: 1;
+            height: 12px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        .bar-fill {
+            height: 100%;
+            transition: width 0.3s, background-color 0.3s;
+        }
+
+        .bar-health { background: #e74c3c; }
+        .bar-hunger { background: #f39c12; }
+        .bar-thirst { background: #3498db; }
+
+        /* Info Anzeige oben rechts */
+        #info {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: #fff;
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-size: 12px;
+            text-align: right;
+        }
+
+        /* Joystick Container links unten */
+        #joystickContainer {
+            position: absolute;
+            bottom: 30px;
+            left: 30px;
+            width: 120px;
+            height: 120px;
+            pointer-events: auto;
+        }
+
+        #joystickBase {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.2);
+            border: 3px solid rgba(255, 255, 255, 0.4);
+            border-radius: 50%;
+        }
+
+        #joystickStick {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            background: rgba(255, 255, 255, 0.6);
+            border: 2px solid rgba(255, 255, 255, 0.8);
+            border-radius: 50%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            transition: all 0.1s;
+        }
+
+        /* Interact Button rechts unten */
+        #interactBtn {
+            position: absolute;
+            bottom: 30px;
+            right: 30px;
+            width: 70px;
+            height: 70px;
+            background: rgba(46, 204, 113, 0.7);
+            border: 3px solid rgba(46, 204, 113, 1);
+            border-radius: 50%;
+            font-size: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: auto;
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.2s;
+        }
+
+        #interactBtn:active {
+            background: rgba(46, 204, 113, 1);
+            transform: scale(0.95);
+        }
+
+        #interactBtn.disabled {
+            background: rgba(127, 140, 141, 0.5);
+            border-color: rgba(127, 140, 141, 0.7);
+        }
+
+        /* Room Info Center-Top */
+        #roomInfo {
+            position: absolute;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: #fff;
+            padding: 12px 25px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            text-align: center;
+            opacity: 0;
+            transition: opacity 0.5s;
+        }
+
+        #roomInfo.show {
+            opacity: 1;
+        }
+
+        /* Message Display */
+        #message {
+            position: absolute;
+            bottom: 120px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(231, 76, 60, 0.9);
+            color: #fff;
+            padding: 12px 25px;
+            border-radius: 8px;
+            font-size: 14px;
+            text-align: center;
+            opacity: 0;
+            transition: opacity 0.3s;
+            max-width: 80%;
+            pointer-events: none;
+        }
+
+        #message.show {
+            opacity: 1;
+        }
+
+        /* Loading Screen */
+        #loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            font-size: 18px;
+        }
+
+        #loading.hidden {
+            display: none;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div id="loading">
+        <div class="spinner"></div>
+        <div>Dark Escape House lädt...</div>
+    </div>
+
+    <!-- Game Canvas -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- HUD -->
+    <div id="hud">
+        <!-- Stats oben links -->
+        <div id="stats">
+            <div class="stat-bar">
+                <span class="stat-label">❤️ Leben</span>
+                <div class="bar-container">
+                    <div class="bar-fill bar-health" id="healthBar" style="width: 100%"></div>
+                </div>
+            </div>
+            <div class="stat-bar">
+                <span class="stat-label">🍞 Hunger</span>
+                <div class="bar-container">
+                    <div class="bar-fill bar-hunger" id="hungerBar" style="width: 100%"></div>
+                </div>
+            </div>
+            <div class="stat-bar">
+                <span class="stat-label">💧 Durst</span>
+                <div class="bar-container">
+                    <div class="bar-fill bar-thirst" id="thirstBar" style="width: 100%"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Info oben rechts -->
+        <div id="info">
+            <div>Raum: <span id="currentRoom">Schlafzimmer</span></div>
+            <div>Zeit: <span id="gameTime">00:00</span></div>
+            <div>FPS: <span id="fps">60</span></div>
+        </div>
+
+        <!-- Room Info Center -->
+        <div id="roomInfo"></div>
+
+        <!-- Message Display -->
+        <div id="message"></div>
+
+        <!-- Joystick links unten -->
+        <div id="joystickContainer">
+            <div id="joystickBase"></div>
+            <div id="joystickStick"></div>
+        </div>
+
+        <!-- Interact Button rechts unten -->
+        <div id="interactBtn">✋</div>
+    </div>
+
+    <!-- Three.js r128 CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <script>
+        // ==========================================
+        // 1. GAME STATE
+        // ==========================================
+        const gameState = {
+            currentRoom: 'bedroom',
+            difficulty: 'medium',
+            health: 100,
+            hunger: 100,
+            thirst: 100,
+            time: 0, // in Sekunden
+            inventory: [],
+            maxInventory: 40,
+            flashlightOn: false,
+            flashlightBattery: 100,
+            position: { x: 0, y: 0, z: 0 },
+            rotation: 0
+        };
+
+        // Raum-Definitionen (wird für Raum-Wechsel gebraucht)
+        const roomDefinitions = {
+            bedroom: { name: 'Schlafzimmer', spawnPos: { x: 0, y: 0.5, z: 0 } },
+            hallway: { name: 'Flur', spawnPos: { x: 0, y: 0.5, z: 0 } },
+            kitchen: { name: 'Küche', spawnPos: { x: 0, y: 0.5, z: 0 } },
+            living: { name: 'Wohnzimmer', spawnPos: { x: 0, y: 0.5, z: 0 } },
+            bathroom: { name: 'Badezimmer', spawnPos: { x: 0, y: 0.5, z: 0 } },
+            stairs: { name: 'Treppe', spawnPos: { x: 0, y: 0.5, z: 0 } },
+            basement: { name: 'Keller', spawnPos: { x: 0, y: 0.5, z: 0 } },
+            cage: { name: 'Käfig', spawnPos: { x: 0, y: 0.5, z: 0 } },
+            attic: { name: 'Dachboden', spawnPos: { x: 0, y: 0.5, z: 0 } }
+        };
+
+        // ==========================================
+        // 2. THREE.JS SETUP
+        // ==========================================
+        let scene, camera, renderer;
+        let player; // Player-Gruppe
+        let currentRoomObjects = []; // Alle Objekte im aktuellen Raum
+
+        // Raycaster für Interaktionen
+        let raycaster = new THREE.Raycaster();
+        let interactableObject = null;
+
+        // Controls
+        let joystickActive = false;
+        let joystickVector = { x: 0, y: 0 };
+        let cameraRotation = { x: 0, y: 0 };
+        let touchStartPos = { x: 0, y: 0 };
+
+        // FPS Counter
+        let frameCount = 0;
+        let lastFPSUpdate = 0;
+
+        function initThree() {
+            // Scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0a0a0a);
+            scene.fog = new THREE.Fog(0x0a0a0a, 1, 15);
+
+            // Camera (First-Person)
+            camera = new THREE.PerspectiveCamera(
+                75,
+                window.innerWidth / window.innerHeight,
+                0.1,
+                100
+            );
+
+            // Renderer
+            const canvas = document.getElementById('gameCanvas');
+            renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = false; // Performance
+
+            // Player-Gruppe (enthält Kamera)
+            player = new THREE.Group();
+            player.add(camera);
+            camera.position.set(0, 1.6, 0); // Augenhöhe
+            scene.add(player);
+
+            // Basis-Beleuchtung
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
+            directionalLight.position.set(5, 10, 5);
+            scene.add(directionalLight);
+
+            // Resize Handler
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+
+            console.log('Three.js initialized (r128)');
+        }
+
+        // ==========================================
+        // 3. ROOM CREATION FUNCTIONS
+        // ==========================================
+
+        // Hilfsfunktion: Erstelle Wände für Raum
+        function createRoomBox(width, height, depth, color) {
+            const wallMaterial = new THREE.MeshLambertMaterial({
+                color: color,
+                side: THREE.BackSide
+            });
+
+            // Boden (sichtbar von oben)
+            const floor = new THREE.Mesh(
+                new THREE.PlaneGeometry(width, depth),
+                new THREE.MeshLambertMaterial({ color: 0x2c1810 })
+            );
+            floor.rotation.x = -Math.PI / 2;
+            floor.position.y = 0;
+
+            // Wände (Box ohne Boden und Decke)
+            const walls = new THREE.Group();
+
+            // Nord-Wand
+            const wallN = new THREE.Mesh(
+                new THREE.PlaneGeometry(width, height),
+                wallMaterial
+            );
+            wallN.position.set(0, height / 2, -depth / 2);
+            walls.add(wallN);
+
+            // Süd-Wand
+            const wallS = new THREE.Mesh(
+                new THREE.PlaneGeometry(width, height),
+                wallMaterial
+            );
+            wallS.position.set(0, height / 2, depth / 2);
+            wallS.rotation.y = Math.PI;
+            walls.add(wallS);
+
+            // Ost-Wand
+            const wallE = new THREE.Mesh(
+                new THREE.PlaneGeometry(depth, height),
+                wallMaterial
+            );
+            wallE.position.set(width / 2, height / 2, 0);
+            wallE.rotation.y = -Math.PI / 2;
+            walls.add(wallE);
+
+            // West-Wand
+            const wallW = new THREE.Mesh(
+                new THREE.PlaneGeometry(depth, height),
+                wallMaterial
+            );
+            wallW.position.set(-width / 2, height / 2, 0);
+            wallW.rotation.y = Math.PI / 2;
+            walls.add(wallW);
+
+            return { floor, walls };
+        }
+
+        // Hilfsfunktion: Erstelle Möbel-Box
+        function createFurniture(width, height, depth, color, x, y, z) {
+            const geometry = new THREE.BoxGeometry(width, height, depth);
+            const material = new THREE.MeshLambertMaterial({ color });
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.position.set(x, y, z);
+            return mesh;
+        }
+
+        // === RAUM 1: SCHLAFZIMMER ===
+        function createRoom_bedroom() {
+            const roomGroup = new THREE.Group();
+
+            // Raum-Wände (4x3x4 meter)
+            const { floor, walls } = createRoomBox(8, 3, 8, 0x3a2a1a);
+            roomGroup.add(floor);
+            roomGroup.add(walls);
+
+            // Bett (rechts)
+            const bed = createFurniture(2, 0.5, 3, 0x8B4513, 2.5, 0.25, -1);
+            roomGroup.add(bed);
+
+            // Tisch (links)
+            const desk = createFurniture(1.5, 0.8, 0.8, 0x654321, -2.5, 0.4, 2);
+            roomGroup.add(desk);
+
+            // Schrank (hinten)
+            const wardrobe = createFurniture(2, 2.5, 0.6, 0x4a3a2a, 0, 1.25, -3.5);
+            roomGroup.add(wardrobe);
+
+            // Tür (vorne) - Placeholder
+            const door = createFurniture(1.2, 2.2, 0.2, 0x654321, 0, 1.1, 3.9);
+            door.userData.isDoor = true;
+            door.userData.targetRoom = 'hallway';
+            door.userData.locked = true;
+            roomGroup.add(door);
+
+            return roomGroup;
+        }
+
+        // === RAUM 2: FLUR ===
+        function createRoom_hallway() {
+            const roomGroup = new THREE.Group();
+
+            // Langer Flur (12x3x4 meter)
+            const { floor, walls } = createRoomBox(12, 3, 4, 0x4a4a4a);
+            roomGroup.add(floor);
+            roomGroup.add(walls);
+
+            // Kleiner Tisch
+            const table = createFurniture(1, 0.6, 1, 0x8B4513, -4, 0.3, 0);
+            roomGroup.add(table);
+
+            // Mehrere Türen
+            const doorBedroom = createFurniture(1, 2, 0.1, 0x654321, -5, 1, -1.9);
+            doorBedroom.userData.isDoor = true;
+            doorBedroom.userData.targetRoom = 'bedroom';
+            roomGroup.add(doorBedroom);
+
+            const doorKitchen = createFurniture(1, 2, 0.1, 0x654321, 0, 1, 1.9);
+            doorKitchen.userData.isDoor = true;
+            doorKitchen.userData.targetRoom = 'kitchen';
+            roomGroup.add(doorKitchen);
+
+            const doorLiving = createFurniture(1, 2, 0.1, 0x654321, 3, 1, -1.9);
+            doorLiving.userData.isDoor = true;
+            doorLiving.userData.targetRoom = 'living';
+            roomGroup.add(doorLiving);
+
+            return roomGroup;
+        }
+
+        // === RAUM 3: KÜCHE ===
+        function createRoom_kitchen() {
+            const roomGroup = new THREE.Group();
+
+            const { floor, walls } = createRoomBox(6, 3, 5, 0x5a4a3a);
+            roomGroup.add(floor);
+            roomGroup.add(walls);
+
+            // Küchentisch (Mitte)
+            const table = createFurniture(2, 0.8, 1.2, 0xA0826D, 0, 0.4, 0);
+            roomGroup.add(table);
+
+            // Küchenschrank (links)
+            const counter = createFurniture(3, 1, 0.6, 0x8B7355, -1, 0.5, -2.2);
+            roomGroup.add(counter);
+
+            // Kühlschrank (rechts)
+            const fridge = createFurniture(0.8, 1.8, 0.8, 0xCCCCCC, 2, 0.9, -2);
+            roomGroup.add(fridge);
+
+            // Tür zurück
+            const door = createFurniture(1, 2, 0.1, 0x654321, 0, 1, 2.4);
+            door.userData.isDoor = true;
+            door.userData.targetRoom = 'hallway';
+            roomGroup.add(door);
+
+            return roomGroup;
+        }
+
+        // === RAUM 4: WOHNZIMMER ===
+        function createRoom_living() {
+            const roomGroup = new THREE.Group();
+
+            const { floor, walls } = createRoomBox(7, 3, 6, 0x4a3a2a);
+            roomGroup.add(floor);
+            roomGroup.add(walls);
+
+            // Sofa (vorne)
+            const sofa = createFurniture(3, 0.8, 1, 0x8B4513, 0, 0.4, 1.5);
+            roomGroup.add(sofa);
+
+            // TV (hinten an Wand)
+            const tv = createFurniture(1.5, 1, 0.2, 0x1a1a1a, 0, 1, -2.8);
+            roomGroup.add(tv);
+
+            // TV-Schrank
+            const tvStand = createFurniture(2, 0.5, 0.5, 0x654321, 0, 0.25, -2.5);
+            roomGroup.add(tvStand);
+
+            // Tür
+            const door = createFurniture(1, 2, 0.1, 0x654321, 3, 1, 2.9);
+            door.userData.isDoor = true;
+            door.userData.targetRoom = 'hallway';
+            roomGroup.add(door);
+
+            return roomGroup;
+        }
+
+        // === RAUM 5: BADEZIMMER ===
+        function createRoom_bathroom() {
+            const roomGroup = new THREE.Group();
+
+            const { floor, walls } = createRoomBox(4, 3, 4, 0x6a6a6a);
+            roomGroup.add(floor);
+            roomGroup.add(walls);
+
+            // Badewanne
+            const bathtub = createFurniture(1.8, 0.6, 0.8, 0xFFFFFF, -1, 0.3, -1.3);
+            roomGroup.add(bathtub);
+
+            // Waschbecken
+            const sink = createFurniture(0.6, 0.8, 0.5, 0xFFFFFF, 1.3, 0.4, -1.5);
+            roomGroup.add(sink);
+
+            // Toilette
+            const toilet = createFurniture(0.5, 0.6, 0.7, 0xFFFFFF, 1.3, 0.3, 0.5);
+            roomGroup.add(toilet);
+
+            // Tür
+            const door = createFurniture(0.8, 2, 0.1, 0x654321, 0, 1, 1.9);
+            door.userData.isDoor = true;
+            door.userData.targetRoom = 'hallway';
+            roomGroup.add(door);
+
+            return roomGroup;
+        }
+
+        // === RAUM 6: TREPPE ===
+        function createRoom_stairs() {
+            const roomGroup = new THREE.Group();
+
+            const { floor, walls } = createRoomBox(5, 3, 8, 0x3a3a3a);
+            roomGroup.add(floor);
+            roomGroup.add(walls);
+
+            // Treppen-Stufen (nach oben)
+            for (let i = 0; i < 10; i++) {
+                const step = createFurniture(2, 0.2, 0.6, 0x654321, 0, i * 0.2, -2 + i * 0.5);
+                roomGroup.add(step);
+            }
+
+            // Tür zu Flur
+            const doorHall = createFurniture(1, 2, 0.1, 0x654321, 0, 1, 3.9);
+            doorHall.userData.isDoor = true;
+            doorHall.userData.targetRoom = 'hallway';
+            roomGroup.add(doorHall);
+
+            // Tür zu Keller
+            const doorBasement = createFurniture(1, 2, 0.1, 0x4a2a1a, -2, 1, -3.9);
+            doorBasement.userData.isDoor = true;
+            doorBasement.userData.targetRoom = 'basement';
+            roomGroup.add(doorBasement);
+
+            // Tür zu Dachboden
+            const doorAttic = createFurniture(1, 1.5, 0.1, 0x8B4513, 2, 2.5, -3.9);
+            doorAttic.userData.isDoor = true;
+            doorAttic.userData.targetRoom = 'attic';
+            roomGroup.add(doorAttic);
+
+            return roomGroup;
+        }
+
+        // === RAUM 7: KELLER ===
+        function createRoom_basement() {
+            const roomGroup = new THREE.Group();
+
+            const { floor, walls } = createRoomBox(10, 2.5, 10, 0x1a1a1a);
+            roomGroup.add(floor);
+            roomGroup.add(walls);
+
+            // Sehr dunkle Atmosphäre
+            const darkAmbient = new THREE.PointLight(0xff0000, 0.2, 5);
+            darkAmbient.position.set(0, 2, 0);
+            roomGroup.add(darkAmbient);
+
+            // Alte Kisten
+            const crate1 = createFurniture(1, 1, 1, 0x4a3a2a, -3, 0.5, -3);
+            const crate2 = createFurniture(1.2, 0.8, 1.2, 0x4a3a2a, 3, 0.4, 2);
+            roomGroup.add(crate1);
+            roomGroup.add(crate2);
+
+            // Tür zum Käfig
+            const doorCage = createFurniture(1, 2, 0.1, 0x2a2a2a, 4, 1, 0);
+            doorCage.userData.isDoor = true;
+            doorCage.userData.targetRoom = 'cage';
+            doorCage.userData.locked = true;
+            roomGroup.add(doorCage);
+
+            // Tür zurück zu Treppe
+            const doorStairs = createFurniture(1, 2, 0.1, 0x654321, 0, 1, 4.9);
+            doorStairs.userData.isDoor = true;
+            doorStairs.userData.targetRoom = 'stairs';
+            roomGroup.add(doorStairs);
+
+            return roomGroup;
+        }
+
+        // === RAUM 8: KÄFIG ===
+        function createRoom_cage() {
+            const roomGroup = new THREE.Group();
+
+            const { floor, walls } = createRoomBox(4, 2.5, 4, 0x0a0a0a);
+            roomGroup.add(floor);
+            roomGroup.add(walls);
+
+            // Gitterstäbe (simuliert)
+            for (let i = -1.5; i <= 1.5; i += 0.3) {
+                const bar = createFurniture(0.05, 2.5, 0.05, 0x888888, i, 1.25, 1.95);
+                roomGroup.add(bar);
+            }
+
+            // Tür zurück zu Keller
+            const door = createFurniture(0.8, 2, 0.1, 0x2a2a2a, 0, 1, -1.9);
+            door.userData.isDoor = true;
+            door.userData.targetRoom = 'basement';
+            roomGroup.add(door);
+
+            return roomGroup;
+        }
+
+        // === RAUM 9: DACHBODEN ===
+        function createRoom_attic() {
+            const roomGroup = new THREE.Group();
+
+            const { floor, walls } = createRoomBox(8, 2, 6, 0x5a4a3a);
+            roomGroup.add(floor);
+            roomGroup.add(walls);
+
+            // Alte Möbel
+            const oldChest = createFurniture(1.5, 0.8, 0.8, 0x654321, -2, 0.4, -2);
+            roomGroup.add(oldChest);
+
+            const oldBox = createFurniture(0.8, 0.8, 0.8, 0x8B4513, 2.5, 0.4, 1);
+            roomGroup.add(oldBox);
+
+            // Tür zurück
+            const door = createFurniture(1, 1.8, 0.1, 0x654321, 0, 0.9, 2.9);
+            door.userData.isDoor = true;
+            door.userData.targetRoom = 'stairs';
+            roomGroup.add(door);
+
+            return roomGroup;
+        }
+
+        // ==========================================
+        // 4. ROOM LOADING
+        // ==========================================
+        function loadRoom(roomId) {
+            // Entferne alte Raum-Objekte
+            currentRoomObjects.forEach(obj => {
+                scene.remove(obj);
+            });
+            currentRoomObjects = [];
+
+            // Erstelle neuen Raum
+            let roomGroup;
+            switch(roomId) {
+                case 'bedroom': roomGroup = createRoom_bedroom(); break;
+                case 'hallway': roomGroup = createRoom_hallway(); break;
+                case 'kitchen': roomGroup = createRoom_kitchen(); break;
+                case 'living': roomGroup = createRoom_living(); break;
+                case 'bathroom': roomGroup = createRoom_bathroom(); break;
+                case 'stairs': roomGroup = createRoom_stairs(); break;
+                case 'basement': roomGroup = createRoom_basement(); break;
+                case 'cage': roomGroup = createRoom_cage(); break;
+                case 'attic': roomGroup = createRoom_attic(); break;
+                default: roomGroup = createRoom_bedroom();
+            }
+
+            scene.add(roomGroup);
+            currentRoomObjects.push(roomGroup);
+
+            // Update GameState
+            gameState.currentRoom = roomId;
+            const roomDef = roomDefinitions[roomId];
+
+            // Setze Spieler-Position
+            player.position.set(
+                roomDef.spawnPos.x,
+                roomDef.spawnPos.y,
+                roomDef.spawnPos.z
+            );
+
+            // Update UI
+            document.getElementById('currentRoom').textContent = roomDef.name;
+            showRoomInfo(roomDef.name);
+
+            console.log(`Raum geladen: ${roomDef.name}`);
+        }
+
+        // ==========================================
+        // 5. PLAYER CONTROLS
+        // ==========================================
+        function setupControls() {
+            const joystickContainer = document.getElementById('joystickContainer');
+            const joystickStick = document.getElementById('joystickStick');
+            const canvas = document.getElementById('gameCanvas');
+            const interactBtn = document.getElementById('interactBtn');
+
+            // Joystick Touch-Steuerung
+            joystickContainer.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                joystickActive = true;
+            });
+
+            joystickContainer.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+                if (!joystickActive) return;
+
+                const touch = e.touches[0];
+                const rect = joystickContainer.getBoundingClientRect();
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+
+                let deltaX = touch.clientX - centerX;
+                let deltaY = touch.clientY - centerY;
+
+                // Begrenze auf Joystick-Radius
+                const maxRadius = 35;
+                const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+                if (distance > maxRadius) {
+                    deltaX = (deltaX / distance) * maxRadius;
+                    deltaY = (deltaY / distance) * maxRadius;
+                }
+
+                joystickStick.style.transform = `translate(calc(-50% + ${deltaX}px), calc(-50% + ${deltaY}px))`;
+
+                joystickVector.x = deltaX / maxRadius;
+                joystickVector.y = deltaY / maxRadius;
+            });
+
+            joystickContainer.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                joystickActive = false;
+                joystickStick.style.transform = 'translate(-50%, -50%)';
+                joystickVector.x = 0;
+                joystickVector.y = 0;
+            });
+
+            // Kamera-Steuerung (Wisch-Gesten auf Canvas)
+            canvas.addEventListener('touchstart', (e) => {
+                if (e.touches.length === 1) {
+                    touchStartPos.x = e.touches[0].clientX;
+                    touchStartPos.y = e.touches[0].clientY;
+                }
+            });
+
+            canvas.addEventListener('touchmove', (e) => {
+                if (e.touches.length === 1) {
+                    const touch = e.touches[0];
+                    const deltaX = touch.clientX - touchStartPos.x;
+                    const deltaY = touch.clientY - touchStartPos.y;
+
+                    cameraRotation.x -= deltaY * 0.002;
+                    cameraRotation.y -= deltaX * 0.002;
+
+                    // Begrenze Vertical Rotation
+                    cameraRotation.x = Math.max(-Math.PI / 3, Math.min(Math.PI / 3, cameraRotation.x));
+
+                    touchStartPos.x = touch.clientX;
+                    touchStartPos.y = touch.clientY;
+                }
+            });
+
+            // Interact Button
+            interactBtn.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                handleInteraction();
+            });
+
+            console.log('Controls initialized');
+        }
+
+        // Player Movement Update (called in game loop)
+        function updatePlayer(delta) {
+            // Bewegung basierend auf Joystick
+            if (joystickActive) {
+                const speed = 3 * delta; // 3 m/s
+                const forward = new THREE.Vector3(0, 0, -1);
+                const right = new THREE.Vector3(1, 0, 0);
+
+                forward.applyQuaternion(player.quaternion);
+                right.applyQuaternion(player.quaternion);
+
+                forward.y = 0;
+                right.y = 0;
+                forward.normalize();
+                right.normalize();
+
+                const moveX = right.multiplyScalar(joystickVector.x * speed);
+                const moveZ = forward.multiplyScalar(-joystickVector.y * speed);
+
+                player.position.add(moveX);
+                player.position.add(moveZ);
+
+                // Einfache Collision Detection (Raum-Grenzen)
+                const maxX = 3.5, maxZ = 3.5;
+                player.position.x = Math.max(-maxX, Math.min(maxX, player.position.x));
+                player.position.z = Math.max(-maxZ, Math.min(maxZ, player.position.z));
+            }
+
+            // Kamera-Rotation
+            player.rotation.y = cameraRotation.y;
+            camera.rotation.x = cameraRotation.x;
+
+            // Check für interagierbare Objekte
+            checkInteractables();
+        }
+
+        // ==========================================
+        // 6. INTERACTIONS
+        // ==========================================
+        function checkInteractables() {
+            // Raycaster von Kamera nach vorne
+            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+
+            const intersects = raycaster.intersectObjects(scene.children, true);
+
+            let foundInteractable = false;
+            for (let intersect of intersects) {
+                if (intersect.distance < 2 && intersect.object.userData.isDoor) {
+                    interactableObject = intersect.object;
+                    foundInteractable = true;
+                    document.getElementById('interactBtn').classList.remove('disabled');
+                    break;
+                }
+            }
+
+            if (!foundInteractable) {
+                interactableObject = null;
+                document.getElementById('interactBtn').classList.add('disabled');
+            }
+        }
+
+        function handleInteraction() {
+            if (!interactableObject) return;
+
+            if (interactableObject.userData.isDoor) {
+                const targetRoom = interactableObject.userData.targetRoom;
+                const locked = interactableObject.userData.locked || false;
+
+                if (locked) {
+                    showMessage('Diese Tür ist verschlossen!', 2000);
+                    return;
+                }
+
+                // Raum wechseln
+                loadRoom(targetRoom);
+            }
+        }
+
+        // ==========================================
+        // 7. UI UPDATES
+        // ==========================================
+        function updateUI() {
+            // Stats Bars
+            document.getElementById('healthBar').style.width = gameState.health + '%';
+            document.getElementById('hungerBar').style.width = gameState.hunger + '%';
+            document.getElementById('thirstBar').style.width = gameState.thirst + '%';
+
+            // Zeit
+            const minutes = Math.floor(gameState.time / 60);
+            const seconds = Math.floor(gameState.time % 60);
+            document.getElementById('gameTime').textContent =
+                `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        }
+
+        function showRoomInfo(roomName) {
+            const roomInfo = document.getElementById('roomInfo');
+            roomInfo.textContent = roomName;
+            roomInfo.classList.add('show');
+            setTimeout(() => {
+                roomInfo.classList.remove('show');
+            }, 2000);
+        }
+
+        function showMessage(text, duration = 3000) {
+            const messageEl = document.getElementById('message');
+            messageEl.textContent = text;
+            messageEl.classList.add('show');
+            setTimeout(() => {
+                messageEl.classList.remove('show');
+            }, duration);
+        }
+
+        // ==========================================
+        // 8. SURVIVAL MECHANICS (Basic)
+        // ==========================================
+        function updateStats(delta) {
+            // Hunger & Durst sinken (basic rate für jetzt)
+            gameState.hunger -= 0.1 * delta;
+            gameState.thirst -= 0.15 * delta;
+
+            // Clamp
+            gameState.hunger = Math.max(0, gameState.hunger);
+            gameState.thirst = Math.max(0, gameState.thirst);
+
+            // Damage from Starvation
+            if (gameState.hunger <= 0) {
+                gameState.health -= 0.5 * delta;
+            }
+            if (gameState.thirst <= 0) {
+                gameState.health -= 0.7 * delta;
+            }
+
+            gameState.health = Math.max(0, Math.min(100, gameState.health));
+
+            // Game Over Check
+            if (gameState.health <= 0) {
+                console.log('GAME OVER - Gestorben!');
+                // TODO: Game Over Screen
+            }
+
+            // Zeit erhöhen
+            gameState.time += delta;
+        }
+
+        // ==========================================
+        // 9. MAIN GAME LOOP
+        // ==========================================
+        let lastTime = performance.now();
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const now = performance.now();
+            const delta = (now - lastTime) / 1000; // Sekunden
+            lastTime = now;
+
+            // Updates
+            updatePlayer(delta);
+            updateStats(delta);
+            updateUI();
+
+            // FPS Counter
+            frameCount++;
+            if (now - lastFPSUpdate > 1000) {
+                document.getElementById('fps').textContent = frameCount;
+                frameCount = 0;
+                lastFPSUpdate = now;
+            }
+
+            // Render
+            renderer.render(scene, camera);
+        }
+
+        // ==========================================
+        // 10. INITIALIZATION
+        // ==========================================
+        function init() {
+            console.log('Initializing Dark Escape House...');
+
+            initThree();
+            setupControls();
+            loadRoom('bedroom'); // Start im Schlafzimmer
+
+            // Hide Loading Screen
+            setTimeout(() => {
+                document.getElementById('loading').classList.add('hidden');
+                animate();
+                console.log('Game started!');
+            }, 1000);
+        }
+
+        // Start Game
+        window.addEventListener('load', init);
+    </script>
+</body>
+</html>

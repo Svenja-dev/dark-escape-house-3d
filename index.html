@@ -784,7 +784,9 @@
             flashlightOn: false,
             flashlightBattery: 100,
             position: { x: 0, y: 0, z: 0 },
-            rotation: 0
+            rotation: 0,
+            lockedDoors: [], // Array von doorIds, die gesperrt bleiben sollen
+            unlockedDoors: [] // Array von doorIds, die aufgeschlossen wurden (persistent)
         };
 
         // Item-Definitionen
@@ -819,7 +821,7 @@
                 emoji: '📄',
                 color: 0xFFFFE0,
                 type: 'note',
-                text: 'Mom locked the front door. Find master key im attic!'
+                text: 'Mom locked the front door. Find master key in the attic!'
             },
             note3: {
                 name: 'Notiz 3',
@@ -1153,6 +1155,7 @@
             frontDoor.userData.targetRoom = 'outside'; // Trigger Win!
             frontDoor.userData.locked = true;
             frontDoor.userData.requiredKey = 'key2'; // Master Key
+            frontDoor.userData.doorId = 'front_door';
             // Visueller Locked-Indicator (rotes Licht)
             const lockIndicator = createFurniture(0.1, 0.1, 0.05, 0xff0000, 5.6, 1.4, 0);
             roomGroup.add(lockIndicator);
@@ -1483,6 +1486,16 @@
                     roomDef.spawnPos.z
                 );
 
+                // Sperre alle Türen, die im gameState.lockedDoors Array sind
+                gameState.lockedDoors.forEach(doorId => {
+                    lockDoorById(doorId);
+                });
+
+                // Entsperre alle Türen, die im gameState.unlockedDoors Array sind
+                gameState.unlockedDoors.forEach(doorId => {
+                    unlockDoorById(doorId);
+                });
+
                 // Update UI
                 document.getElementById('currentRoom').textContent = roomDef.name;
                 showRoomInfo(roomDef.name);
@@ -1704,10 +1717,15 @@
                 if (locked) {
                     // Check ob Spieler den richtigen Schlüssel hat
                     if (requiredKey && gameState.inventory.includes(requiredKey)) {
-                        // Tür aufschließen!
-                        interactableObject.userData.locked = false;
+                        // Tür aufschließen (persistent)!
+                        const doorId = interactableObject.userData.doorId;
+                        if (doorId) {
+                            unlockDoorById(doorId, true); // Persistent unlock
+                        } else {
+                            // Fallback für Türen ohne doorId
+                            interactableObject.userData.locked = false;
+                        }
                         showMessage(`Tür mit ${requiredKey} aufgeschlossen!`, 2000);
-                        // TODO: Key verbrauchen? (je nach Game-Design)
                         return;
                     } else {
                         const keyName = requiredKey ? ` (braucht ${requiredKey})` : '';
@@ -2157,17 +2175,26 @@
                 } else if (npcDef.punishment === 'locked_bedroom') {
                     // Teleport zurück ins Schlafzimmer und sperre Tür
                     showMessage(`${npcDef.name} hat dich erwischt! -${npcDef.damage} HP`, 3000);
+                    // Sperre die Tür global (persistent)
+                    lockDoorById('bedroom_door', true);
                     setTimeout(() => {
                         loadRoom('bedroom', true);
-                        // TODO: Tür wieder locked machen
+                        // Nach Fade: Zeige Nachricht
+                        setTimeout(() => {
+                            showMessage('Die Tür wurde wieder verschlossen! Du brauchst den Schlüssel.', 2500);
+                        }, 600);
                     }, 1000);
                 } else if (npcDef.punishment === 'locked_cage') {
                     // Teleport in Käfig
                     showMessage(`${npcDef.name} hat dich erwischt! -${npcDef.damage} HP`, 3000);
+                    // Sperre die Käfig-Tür global (im basement)
+                    lockDoorById('cage_door', true);
                     setTimeout(() => {
                         loadRoom('cage', true);
-                        // Lock cage door
-                        // TODO: Implement
+                        // Nach Fade: Zeige Nachricht
+                        setTimeout(() => {
+                            showMessage('Du wurdest im Käfig eingesperrt! Brauchst Lockpick zum Entkommen.', 3000);
+                        }, 600);
                     }, 1000);
                 }
 
@@ -2193,6 +2220,56 @@
                 clearInterval(npcMoveTimers[key]);
             });
             npcMoveTimers = {};
+        }
+
+        // Helper: Lock a door by its doorId
+        function lockDoorById(doorId, addToGlobalList = false) {
+            // Sperre die Tür im aktuellen Raum (falls vorhanden)
+            currentRoomObjects.forEach(roomGroup => {
+                roomGroup.children.forEach(obj => {
+                    if (obj.userData.isDoor && obj.userData.doorId === doorId) {
+                        obj.userData.locked = true;
+                        console.log(`Door ${doorId} locked`);
+                    }
+                });
+            });
+
+            // Optional: Füge zur globalen Liste hinzu (persistent über Raumwechsel)
+            if (addToGlobalList && !gameState.lockedDoors.includes(doorId)) {
+                gameState.lockedDoors.push(doorId);
+                console.log(`Door ${doorId} added to global lock list`);
+            }
+
+            // Entferne aus unlockedDoors (falls vorhanden)
+            const unlockedIndex = gameState.unlockedDoors.indexOf(doorId);
+            if (unlockedIndex > -1) {
+                gameState.unlockedDoors.splice(unlockedIndex, 1);
+            }
+        }
+
+        // Helper: Unlock a door by its doorId
+        function unlockDoorById(doorId, addToGlobalList = false) {
+            // Entsperre die Tür im aktuellen Raum (falls vorhanden)
+            currentRoomObjects.forEach(roomGroup => {
+                roomGroup.children.forEach(obj => {
+                    if (obj.userData.isDoor && obj.userData.doorId === doorId) {
+                        obj.userData.locked = false;
+                        console.log(`Door ${doorId} unlocked`);
+                    }
+                });
+            });
+
+            // Optional: Füge zur globalen Liste hinzu (persistent über Raumwechsel)
+            if (addToGlobalList && !gameState.unlockedDoors.includes(doorId)) {
+                gameState.unlockedDoors.push(doorId);
+                console.log(`Door ${doorId} added to global unlock list`);
+            }
+
+            // Entferne aus lockedDoors (falls vorhanden)
+            const lockedIndex = gameState.lockedDoors.indexOf(doorId);
+            if (lockedIndex > -1) {
+                gameState.lockedDoors.splice(lockedIndex, 1);
+            }
         }
 
         // ==========================================
@@ -2405,6 +2482,7 @@
             setupInventoryListeners();
             spawnNPCs(); // Spawn alle NPCs
             loadRoom('bedroom'); // Start im Schlafzimmer
+            updateFlashlightButton(); // Initial button state
 
             // Restart Button Listeners
             document.getElementById('restartBtn').addEventListener('click', restartGame);

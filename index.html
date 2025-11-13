@@ -200,6 +200,24 @@
             opacity: 1;
         }
 
+        /* Fade Overlay für Raum-Wechsel */
+        #fadeOverlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            opacity: 0;
+            pointer-events: none;
+            z-index: 500;
+            transition: opacity 0.5s;
+        }
+
+        #fadeOverlay.active {
+            opacity: 1;
+        }
+
         /* Loading Screen */
         #loading {
             position: fixed;
@@ -242,6 +260,9 @@
         <div class="spinner"></div>
         <div>Dark Escape House lädt...</div>
     </div>
+
+    <!-- Fade Overlay -->
+    <div id="fadeOverlay"></div>
 
     <!-- Game Canvas -->
     <canvas id="gameCanvas"></canvas>
@@ -317,15 +338,51 @@
 
         // Raum-Definitionen (wird für Raum-Wechsel gebraucht)
         const roomDefinitions = {
-            bedroom: { name: 'Schlafzimmer', spawnPos: { x: 0, y: 0.5, z: 0 } },
-            hallway: { name: 'Flur', spawnPos: { x: 0, y: 0.5, z: 0 } },
-            kitchen: { name: 'Küche', spawnPos: { x: 0, y: 0.5, z: 0 } },
-            living: { name: 'Wohnzimmer', spawnPos: { x: 0, y: 0.5, z: 0 } },
-            bathroom: { name: 'Badezimmer', spawnPos: { x: 0, y: 0.5, z: 0 } },
-            stairs: { name: 'Treppe', spawnPos: { x: 0, y: 0.5, z: 0 } },
-            basement: { name: 'Keller', spawnPos: { x: 0, y: 0.5, z: 0 } },
-            cage: { name: 'Käfig', spawnPos: { x: 0, y: 0.5, z: 0 } },
-            attic: { name: 'Dachboden', spawnPos: { x: 0, y: 0.5, z: 0 } }
+            bedroom: {
+                name: 'Schlafzimmer',
+                spawnPos: { x: 0, y: 0.5, z: 0 },
+                boundaries: { x: 3.5, z: 3.5 }
+            },
+            hallway: {
+                name: 'Flur',
+                spawnPos: { x: 0, y: 0.5, z: 0 },
+                boundaries: { x: 5.5, z: 1.5 }
+            },
+            kitchen: {
+                name: 'Küche',
+                spawnPos: { x: 0, y: 0.5, z: 0 },
+                boundaries: { x: 2.5, z: 2 }
+            },
+            living: {
+                name: 'Wohnzimmer',
+                spawnPos: { x: 0, y: 0.5, z: 0 },
+                boundaries: { x: 3, z: 2.5 }
+            },
+            bathroom: {
+                name: 'Badezimmer',
+                spawnPos: { x: 0, y: 0.5, z: 0 },
+                boundaries: { x: 1.5, z: 1.5 }
+            },
+            stairs: {
+                name: 'Treppe',
+                spawnPos: { x: 0, y: 0.5, z: 2 },
+                boundaries: { x: 2, z: 3.5 }
+            },
+            basement: {
+                name: 'Keller',
+                spawnPos: { x: 0, y: 0.5, z: 0 },
+                boundaries: { x: 4.5, z: 4.5 }
+            },
+            cage: {
+                name: 'Käfig',
+                spawnPos: { x: 0, y: 0.5, z: 0 },
+                boundaries: { x: 1.5, z: 1.5 }
+            },
+            attic: {
+                name: 'Dachboden',
+                spawnPos: { x: 0, y: 0.5, z: 0 },
+                boundaries: { x: 3.5, z: 2.5 }
+            }
         };
 
         // ==========================================
@@ -484,11 +541,16 @@
             const wardrobe = createFurniture(2, 2.5, 0.6, 0x4a3a2a, 0, 1.25, -3.5);
             roomGroup.add(wardrobe);
 
-            // Tür (vorne) - Placeholder
+            // Tür (vorne) - Am Anfang verschlossen!
             const door = createFurniture(1.2, 2.2, 0.2, 0x654321, 0, 1.1, 3.9);
             door.userData.isDoor = true;
             door.userData.targetRoom = 'hallway';
             door.userData.locked = true;
+            door.userData.requiredKey = 'key'; // Braucht ersten Schlüssel
+            door.userData.doorId = 'bedroom_door';
+            // Locked Indicator (rotes Licht)
+            const lockIndicator = createFurniture(0.08, 0.08, 0.03, 0xff0000, 0.6, 1.3, 3.85);
+            roomGroup.add(lockIndicator);
             roomGroup.add(door);
 
             return roomGroup;
@@ -522,6 +584,27 @@
             doorLiving.userData.isDoor = true;
             doorLiving.userData.targetRoom = 'living';
             roomGroup.add(doorLiving);
+
+            const doorBathroom = createFurniture(0.8, 2, 0.1, 0x654321, 5, 1, 1.9);
+            doorBathroom.userData.isDoor = true;
+            doorBathroom.userData.targetRoom = 'bathroom';
+            roomGroup.add(doorBathroom);
+
+            const doorStairs = createFurniture(1, 2, 0.1, 0x654321, -3, 1, 1.9);
+            doorStairs.userData.isDoor = true;
+            doorStairs.userData.targetRoom = 'stairs';
+            roomGroup.add(doorStairs);
+
+            // HAUSTÜR (WIN CONDITION!) - Ganz am Ende des Flurs
+            const frontDoor = createFurniture(1.5, 2.5, 0.2, 0x2c1810, 5.8, 1.25, 0);
+            frontDoor.userData.isDoor = true;
+            frontDoor.userData.targetRoom = 'outside'; // Trigger Win!
+            frontDoor.userData.locked = true;
+            frontDoor.userData.requiredKey = 'key2'; // Master Key
+            // Visueller Locked-Indicator (rotes Licht)
+            const lockIndicator = createFurniture(0.1, 0.1, 0.05, 0xff0000, 5.6, 1.4, 0);
+            roomGroup.add(lockIndicator);
+            roomGroup.add(frontDoor);
 
             return roomGroup;
         }
@@ -667,11 +750,13 @@
             roomGroup.add(crate1);
             roomGroup.add(crate2);
 
-            // Tür zum Käfig
+            // Tür zum Käfig (verschlossen, braucht Lockpick)
             const doorCage = createFurniture(1, 2, 0.1, 0x2a2a2a, 4, 1, 0);
             doorCage.userData.isDoor = true;
             doorCage.userData.targetRoom = 'cage';
-            doorCage.userData.locked = true;
+            doorCage.userData.locked = false; // Am Anfang offen (Monster sperrt dich später ein)
+            doorCage.userData.requiredKey = 'lockpick'; // Für Escape aus Käfig
+            doorCage.userData.doorId = 'cage_door';
             roomGroup.add(doorCage);
 
             // Tür zurück zu Treppe
@@ -733,47 +818,74 @@
         // ==========================================
         // 4. ROOM LOADING
         // ==========================================
-        function loadRoom(roomId) {
-            // Entferne alte Raum-Objekte
-            currentRoomObjects.forEach(obj => {
-                scene.remove(obj);
-            });
-            currentRoomObjects = [];
 
-            // Erstelle neuen Raum
-            let roomGroup;
-            switch(roomId) {
-                case 'bedroom': roomGroup = createRoom_bedroom(); break;
-                case 'hallway': roomGroup = createRoom_hallway(); break;
-                case 'kitchen': roomGroup = createRoom_kitchen(); break;
-                case 'living': roomGroup = createRoom_living(); break;
-                case 'bathroom': roomGroup = createRoom_bathroom(); break;
-                case 'stairs': roomGroup = createRoom_stairs(); break;
-                case 'basement': roomGroup = createRoom_basement(); break;
-                case 'cage': roomGroup = createRoom_cage(); break;
-                case 'attic': roomGroup = createRoom_attic(); break;
-                default: roomGroup = createRoom_bedroom();
+        // Fade-to-Black Effekt
+        function fadeToBlack(callback, duration = 500) {
+            const overlay = document.getElementById('fadeOverlay');
+
+            // Fade Out (zu Schwarz)
+            overlay.classList.add('active');
+
+            setTimeout(() => {
+                // Callback ausführen (Raum wechseln)
+                if (callback) callback();
+
+                // Fade In (zurück zu normal)
+                setTimeout(() => {
+                    overlay.classList.remove('active');
+                }, 100);
+            }, duration);
+        }
+
+        function loadRoom(roomId, useFade = false) {
+            const actualLoad = () => {
+                // Entferne alte Raum-Objekte
+                currentRoomObjects.forEach(obj => {
+                    scene.remove(obj);
+                });
+                currentRoomObjects = [];
+
+                // Erstelle neuen Raum
+                let roomGroup;
+                switch(roomId) {
+                    case 'bedroom': roomGroup = createRoom_bedroom(); break;
+                    case 'hallway': roomGroup = createRoom_hallway(); break;
+                    case 'kitchen': roomGroup = createRoom_kitchen(); break;
+                    case 'living': roomGroup = createRoom_living(); break;
+                    case 'bathroom': roomGroup = createRoom_bathroom(); break;
+                    case 'stairs': roomGroup = createRoom_stairs(); break;
+                    case 'basement': roomGroup = createRoom_basement(); break;
+                    case 'cage': roomGroup = createRoom_cage(); break;
+                    case 'attic': roomGroup = createRoom_attic(); break;
+                    default: roomGroup = createRoom_bedroom();
+                }
+
+                scene.add(roomGroup);
+                currentRoomObjects.push(roomGroup);
+
+                // Update GameState
+                gameState.currentRoom = roomId;
+                const roomDef = roomDefinitions[roomId];
+
+                // Setze Spieler-Position
+                player.position.set(
+                    roomDef.spawnPos.x,
+                    roomDef.spawnPos.y,
+                    roomDef.spawnPos.z
+                );
+
+                // Update UI
+                document.getElementById('currentRoom').textContent = roomDef.name;
+                showRoomInfo(roomDef.name);
+
+                console.log(`Raum geladen: ${roomDef.name}`);
+            };
+
+            if (useFade) {
+                fadeToBlack(actualLoad);
+            } else {
+                actualLoad();
             }
-
-            scene.add(roomGroup);
-            currentRoomObjects.push(roomGroup);
-
-            // Update GameState
-            gameState.currentRoom = roomId;
-            const roomDef = roomDefinitions[roomId];
-
-            // Setze Spieler-Position
-            player.position.set(
-                roomDef.spawnPos.x,
-                roomDef.spawnPos.y,
-                roomDef.spawnPos.z
-            );
-
-            // Update UI
-            document.getElementById('currentRoom').textContent = roomDef.name;
-            showRoomInfo(roomDef.name);
-
-            console.log(`Raum geladen: ${roomDef.name}`);
         }
 
         // ==========================================
@@ -881,10 +993,14 @@
                 player.position.add(moveX);
                 player.position.add(moveZ);
 
-                // Einfache Collision Detection (Raum-Grenzen)
-                const maxX = 3.5, maxZ = 3.5;
-                player.position.x = Math.max(-maxX, Math.min(maxX, player.position.x));
-                player.position.z = Math.max(-maxZ, Math.min(maxZ, player.position.z));
+                // Collision Detection mit Raum-spezifischen Grenzen
+                const roomDef = roomDefinitions[gameState.currentRoom];
+                if (roomDef && roomDef.boundaries) {
+                    const maxX = roomDef.boundaries.x;
+                    const maxZ = roomDef.boundaries.z;
+                    player.position.x = Math.max(-maxX, Math.min(maxX, player.position.x));
+                    player.position.z = Math.max(-maxZ, Math.min(maxZ, player.position.z));
+                }
             }
 
             // Kamera-Rotation
@@ -926,19 +1042,53 @@
             if (interactableObject.userData.isDoor) {
                 const targetRoom = interactableObject.userData.targetRoom;
                 const locked = interactableObject.userData.locked || false;
+                const requiredKey = interactableObject.userData.requiredKey;
 
+                // Check ob Tür verschlossen ist
                 if (locked) {
-                    showMessage('Diese Tür ist verschlossen!', 2000);
+                    // Check ob Spieler den richtigen Schlüssel hat
+                    if (requiredKey && gameState.inventory.includes(requiredKey)) {
+                        // Tür aufschließen!
+                        interactableObject.userData.locked = false;
+                        showMessage(`Tür mit ${requiredKey} aufgeschlossen!`, 2000);
+                        // TODO: Key verbrauchen? (je nach Game-Design)
+                        return;
+                    } else {
+                        const keyName = requiredKey ? ` (braucht ${requiredKey})` : '';
+                        showMessage(`Diese Tür ist verschlossen!${keyName}`, 2500);
+                        return;
+                    }
+                }
+
+                // Win Condition Check!
+                if (targetRoom === 'outside') {
+                    // Spieler hat das Spiel gewonnen!
+                    victory();
                     return;
                 }
 
-                // Raum wechseln
-                loadRoom(targetRoom);
+                // Raum wechseln mit Fade-Effekt
+                loadRoom(targetRoom, true);
             }
         }
 
         // ==========================================
-        // 7. UI UPDATES
+        // 7. WIN/LOSE CONDITIONS (Basic)
+        // ==========================================
+        function victory() {
+            showMessage('🎉 DU BIST ENTKOMMEN! Glückwunsch!', 5000);
+            console.log('VICTORY!');
+            // TODO: Victory Screen in späterem Commit
+        }
+
+        function gameOver(reason = 'Du bist gestorben') {
+            showMessage(`💀 GAME OVER - ${reason}`, 5000);
+            console.log('GAME OVER:', reason);
+            // TODO: Game Over Screen in späterem Commit
+        }
+
+        // ==========================================
+        // 8. UI UPDATES
         // ==========================================
         function updateUI() {
             // Stats Bars
@@ -972,7 +1122,7 @@
         }
 
         // ==========================================
-        // 8. SURVIVAL MECHANICS (Basic)
+        // 9. SURVIVAL MECHANICS (Basic)
         // ==========================================
         function updateStats(delta) {
             // Hunger & Durst sinken (basic rate für jetzt)
@@ -1004,7 +1154,7 @@
         }
 
         // ==========================================
-        // 9. MAIN GAME LOOP
+        // 10. MAIN GAME LOOP
         // ==========================================
         let lastTime = performance.now();
 
@@ -1033,7 +1183,7 @@
         }
 
         // ==========================================
-        // 10. INITIALIZATION
+        // 11. INITIALIZATION
         // ==========================================
         function init() {
             console.log('Initializing Dark Escape House...');

@@ -294,6 +294,7 @@
         <!-- Info oben rechts -->
         <div id="info">
             <div>Raum: <span id="currentRoom">Schlafzimmer</span></div>
+            <div>🎒 Inventar: <span id="inventoryCount">0</span>/40</div>
             <div>Zeit: <span id="gameTime">00:00</span></div>
             <div>FPS: <span id="fps">60</span></div>
         </div>
@@ -334,6 +335,53 @@
             flashlightBattery: 100,
             position: { x: 0, y: 0, z: 0 },
             rotation: 0
+        };
+
+        // Item-Definitionen
+        const itemDefinitions = {
+            // TOOLS
+            key: { name: 'Schlüssel', emoji: '🔑', color: 0xFFD700, type: 'tool', use: 'unlock' },
+            key2: { name: 'Master Key', emoji: '🗝️', color: 0xC0C0C0, type: 'tool', use: 'unlock' },
+            lockpick: { name: 'Dietrich', emoji: '🔧', color: 0x808080, type: 'tool', use: 'unlock' },
+            flashlight: { name: 'Taschenlampe', emoji: '🔦', color: 0xFFFF00, type: 'tool', use: 'light', battery: 100 },
+            battery: { name: 'Batterie', emoji: '🔋', color: 0x00FF00, type: 'consumable', use: 'power', restores: 100 },
+
+            // FOOD & DRINK
+            bread: { name: 'Brot', emoji: '🍞', color: 0xD2691E, type: 'consumable', use: 'eat', restores_hunger: 30 },
+            water: { name: 'Wasser', emoji: '💧', color: 0x4169E1, type: 'consumable', use: 'drink', restores_thirst: 40 },
+            medicine: { name: 'Medizin', emoji: '💊', color: 0xFF1493, type: 'consumable', use: 'heal', restores_health: 25 },
+
+            // WEAPONS
+            knife: { name: 'Messer', emoji: '🔪', color: 0xC0C0C0, type: 'weapon', use: 'weapon', damage: 20 },
+            board: { name: 'Brett', emoji: '🪵', color: 0x8B4513, type: 'tool', use: 'barricade' },
+            rope: { name: 'Seil', emoji: '🪢', color: 0xDAA520, type: 'tool', use: 'escape' },
+
+            // NOTES
+            note1: {
+                name: 'Notiz 1',
+                emoji: '📄',
+                color: 0xFFFFE0,
+                type: 'note',
+                text: 'The monster lives in the basement. Stay quiet!'
+            },
+            note2: {
+                name: 'Notiz 2',
+                emoji: '📄',
+                color: 0xFFFFE0,
+                type: 'note',
+                text: 'Mom locked the front door. Find master key im attic!'
+            },
+            note3: {
+                name: 'Notiz 3',
+                emoji: '📄',
+                color: 0xFFFFE0,
+                type: 'note',
+                text: 'Dad is dangerous when angry. Avoid the living room!'
+            },
+
+            // MISC
+            coin: { name: 'Münze', emoji: '🪙', color: 0xFFD700, type: 'misc', use: 'money' },
+            remote: { name: 'Fernbedienung', emoji: '📱', color: 0x1C1C1C, type: 'tool', use: 'distract' }
         };
 
         // Raum-Definitionen (wird für Raum-Wechsel gebraucht)
@@ -520,6 +568,35 @@
             return mesh;
         }
 
+        // Hilfsfunktion: Erstelle Item (sammelbar)
+        function createItem(itemId, x, y, z) {
+            const itemDef = itemDefinitions[itemId];
+            if (!itemDef) {
+                console.error('Unknown item:', itemId);
+                return null;
+            }
+
+            // Item als kleine Box mit Glow-Effect
+            const geometry = new THREE.BoxGeometry(0.3, 0.3, 0.3);
+            const material = new THREE.MeshLambertMaterial({
+                color: itemDef.color,
+                emissive: itemDef.color,
+                emissiveIntensity: 0.5
+            });
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.position.set(x, y, z);
+
+            // UserData für Interaction
+            mesh.userData.isItem = true;
+            mesh.userData.itemId = itemId;
+            mesh.userData.itemName = itemDef.name;
+
+            // Rotation Animation (im Game Loop)
+            mesh.userData.rotationSpeed = 0.02;
+
+            return mesh;
+        }
+
         // === RAUM 1: SCHLAFZIMMER ===
         function createRoom_bedroom() {
             const roomGroup = new THREE.Group();
@@ -540,6 +617,19 @@
             // Schrank (hinten)
             const wardrobe = createFurniture(2, 2.5, 0.6, 0x4a3a2a, 0, 1.25, -3.5);
             roomGroup.add(wardrobe);
+
+            // === ITEMS ===
+            // Schlüssel auf dem Tisch (zum Rauskommen!)
+            const item_key = createItem('key', -2.5, 1, 2);
+            roomGroup.add(item_key);
+
+            // Taschenlampe auf dem Bett
+            const item_flashlight = createItem('flashlight', 2.5, 0.8, -1);
+            roomGroup.add(item_flashlight);
+
+            // Notiz 1 auf dem Boden
+            const item_note1 = createItem('note1', 1, 0.2, 0);
+            roomGroup.add(item_note1);
 
             // Tür (vorne) - Am Anfang verschlossen!
             const door = createFurniture(1.2, 2.2, 0.2, 0x654321, 0, 1.1, 3.9);
@@ -568,6 +658,11 @@
             // Kleiner Tisch
             const table = createFurniture(1, 0.6, 1, 0x8B4513, -4, 0.3, 0);
             roomGroup.add(table);
+
+            // === ITEMS ===
+            // Münze auf dem Tisch
+            const item_coin = createItem('coin', -4, 0.7, 0);
+            roomGroup.add(item_coin);
 
             // Mehrere Türen
             const doorBedroom = createFurniture(1, 2, 0.1, 0x654321, -5, 1, -1.9);
@@ -629,6 +724,23 @@
             const fridge = createFurniture(0.8, 1.8, 0.8, 0xCCCCCC, 2, 0.9, -2);
             roomGroup.add(fridge);
 
+            // === ITEMS ===
+            // Brot auf dem Tisch
+            const item_bread = createItem('bread', 0.5, 1, 0);
+            roomGroup.add(item_bread);
+
+            // Wasser beim Kühlschrank
+            const item_water = createItem('water', 2.5, 0.3, -2);
+            roomGroup.add(item_water);
+
+            // Messer auf der Küchentheke
+            const item_knife = createItem('knife', -1, 1.2, -2.2);
+            roomGroup.add(item_knife);
+
+            // Lockpick versteckt in der Ecke
+            const item_lockpick = createItem('lockpick', -2.5, 0.2, 2);
+            roomGroup.add(item_lockpick);
+
             // Tür zurück
             const door = createFurniture(1, 2, 0.1, 0x654321, 0, 1, 2.4);
             door.userData.isDoor = true;
@@ -658,6 +770,15 @@
             const tvStand = createFurniture(2, 0.5, 0.5, 0x654321, 0, 0.25, -2.5);
             roomGroup.add(tvStand);
 
+            // === ITEMS ===
+            // Fernbedienung auf dem TV-Schrank
+            const item_remote = createItem('remote', 0, 0.6, -2.5);
+            roomGroup.add(item_remote);
+
+            // Notiz 3 auf dem Sofa
+            const item_note3 = createItem('note3', -0.5, 1, 1.5);
+            roomGroup.add(item_note3);
+
             // Tür
             const door = createFurniture(1, 2, 0.1, 0x654321, 3, 1, 2.9);
             door.userData.isDoor = true;
@@ -686,6 +807,15 @@
             // Toilette
             const toilet = createFurniture(0.5, 0.6, 0.7, 0xFFFFFF, 1.3, 0.3, 0.5);
             roomGroup.add(toilet);
+
+            // === ITEMS ===
+            // Medizin auf dem Waschbecken
+            const item_medicine = createItem('medicine', 1.3, 1, -1.5);
+            roomGroup.add(item_medicine);
+
+            // Wasser (2. Flasche) in der Badewanne
+            const item_water2 = createItem('water', -1, 0.8, -1.3);
+            roomGroup.add(item_water2);
 
             // Tür
             const door = createFurniture(0.8, 2, 0.1, 0x654321, 0, 1, 1.9);
@@ -750,6 +880,19 @@
             roomGroup.add(crate1);
             roomGroup.add(crate2);
 
+            // === ITEMS ===
+            // Batterie versteckt hinter Kiste
+            const item_battery = createItem('battery', -3.5, 0.3, -3.5);
+            roomGroup.add(item_battery);
+
+            // Brett gegen die Wand gelehnt
+            const item_board = createItem('board', 4, 0.5, -4);
+            roomGroup.add(item_board);
+
+            // Notiz 2 auf dem Boden
+            const item_note2 = createItem('note2', 0, 0.2, 0);
+            roomGroup.add(item_note2);
+
             // Tür zum Käfig (verschlossen, braucht Lockpick)
             const doorCage = createFurniture(1, 2, 0.1, 0x2a2a2a, 4, 1, 0);
             doorCage.userData.isDoor = true;
@@ -805,6 +948,15 @@
 
             const oldBox = createFurniture(0.8, 0.8, 0.8, 0x8B4513, 2.5, 0.4, 1);
             roomGroup.add(oldBox);
+
+            // === ITEMS ===
+            // MASTER KEY in der alten Truhe! (WICHTIGSTES ITEM!)
+            const item_key2 = createItem('key2', -2, 1, -2);
+            roomGroup.add(item_key2);
+
+            // Seil auf dem Boden
+            const item_rope = createItem('rope', 2.5, 0.2, -1);
+            roomGroup.add(item_rope);
 
             // Tür zurück
             const door = createFurniture(1, 1.8, 0.1, 0x654321, 0, 0.9, 2.9);
@@ -1022,7 +1174,15 @@
 
             let foundInteractable = false;
             for (let intersect of intersects) {
+                // Check für Türen
                 if (intersect.distance < 2 && intersect.object.userData.isDoor) {
+                    interactableObject = intersect.object;
+                    foundInteractable = true;
+                    document.getElementById('interactBtn').classList.remove('disabled');
+                    break;
+                }
+                // Check für Items
+                if (intersect.distance < 2.5 && intersect.object.userData.isItem) {
                     interactableObject = intersect.object;
                     foundInteractable = true;
                     document.getElementById('interactBtn').classList.remove('disabled');
@@ -1039,6 +1199,32 @@
         function handleInteraction() {
             if (!interactableObject) return;
 
+            // === ITEM PICKUP ===
+            if (interactableObject.userData.isItem) {
+                const itemId = interactableObject.userData.itemId;
+                const itemName = interactableObject.userData.itemName;
+
+                // Check Inventar-Limit
+                if (gameState.inventory.length >= gameState.maxInventory) {
+                    showMessage('Inventar ist voll! (40/40)', 2000);
+                    return;
+                }
+
+                // Item zum Inventar hinzufügen
+                gameState.inventory.push(itemId);
+
+                // Item aus Scene entfernen
+                interactableObject.parent.remove(interactableObject);
+                interactableObject = null;
+
+                // Feedback
+                showMessage(`${itemName} aufgesammelt! (${gameState.inventory.length}/${gameState.maxInventory})`, 2000);
+                console.log('Picked up:', itemId);
+
+                return;
+            }
+
+            // === DOOR INTERACTION ===
             if (interactableObject.userData.isDoor) {
                 const targetRoom = interactableObject.userData.targetRoom;
                 const locked = interactableObject.userData.locked || false;
@@ -1096,11 +1282,25 @@
             document.getElementById('hungerBar').style.width = gameState.hunger + '%';
             document.getElementById('thirstBar').style.width = gameState.thirst + '%';
 
+            // Inventar Count
+            document.getElementById('inventoryCount').textContent = gameState.inventory.length;
+
             // Zeit
             const minutes = Math.floor(gameState.time / 60);
             const seconds = Math.floor(gameState.time % 60);
             document.getElementById('gameTime').textContent =
                 `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        }
+
+        // Animiere Items (Rotation)
+        function animateItems() {
+            currentRoomObjects.forEach(roomGroup => {
+                roomGroup.children.forEach(obj => {
+                    if (obj.userData.isItem && obj.userData.rotationSpeed) {
+                        obj.rotation.y += obj.userData.rotationSpeed;
+                    }
+                });
+            });
         }
 
         function showRoomInfo(roomName) {
@@ -1169,6 +1369,7 @@
             updatePlayer(delta);
             updateStats(delta);
             updateUI();
+            animateItems(); // Rotiere Items
 
             // FPS Counter
             frameCount++;

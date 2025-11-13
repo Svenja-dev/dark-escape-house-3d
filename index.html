@@ -96,6 +96,28 @@
             line-height: 1.6;
         }
 
+        /* FPS Warning Colors */
+        #fps.good {
+            color: #2ecc71;
+            font-weight: bold;
+        }
+
+        #fps.warning {
+            color: #f39c12;
+            font-weight: bold;
+        }
+
+        #fps.critical {
+            color: #e74c3c;
+            font-weight: bold;
+            animation: fps-blink 1s infinite;
+        }
+
+        @keyframes fps-blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0.5; }
+        }
+
         /* Joystick Container links unten */
         #joystickContainer {
             position: absolute;
@@ -646,6 +668,12 @@
             .restart-btn {
                 padding: 12px 30px;
                 font-size: 18px;
+            }
+
+            /* Message höher positionieren für Safety Zone */
+            #message {
+                bottom: 140px;
+                font-size: 11px;
             }
         }
     </style>
@@ -1992,7 +2020,7 @@
         // 9. NPC-SYSTEM
         // ==========================================
 
-        // NPC-Definitionen
+        // NPC-Definitionen (Balanced für faireres Gameplay)
         const npcDefinitions = {
             mother: {
                 name: 'Mutter',
@@ -2000,7 +2028,7 @@
                 color: 0xFF69B4,
                 spawnRooms: ['kitchen', 'hallway', 'living'],
                 moveInterval: 2500, // ms (difficulty-abhängig)
-                catchChance: 0.6,
+                catchChance: 0.5, // Reduziert von 0.6 für faireres Gameplay
                 damage: 10,
                 punishment: 'locked_bedroom' // Sperrt zurück ins Schlafzimmer
             },
@@ -2010,7 +2038,7 @@
                 color: 0x8B4513,
                 spawnRooms: ['living'],
                 moveInterval: 4000,
-                catchChance: 0.4,
+                catchChance: 0.4, // Bleibt gleich (instant death ist schon krass)
                 damage: 999, // INSTANT GAME OVER!
                 punishment: 'game_over'
             },
@@ -2020,7 +2048,7 @@
                 color: 0x8B0000,
                 spawnRooms: ['basement'],
                 moveInterval: 2000,
-                catchChance: 0.8,
+                catchChance: 0.65, // Reduziert von 0.8 (war zu brutal)
                 damage: 20,
                 punishment: 'locked_cage' // Sperrt in Käfig
             }
@@ -2335,8 +2363,8 @@
         // Update Flashlight (Batterie-Verbrauch)
         function updateFlashlight(delta) {
             if (gameState.flashlightOn) {
-                // Batterie verbrauchen
-                gameState.flashlightBattery -= 0.5 * delta; // 0.5% pro Sekunde
+                // Batterie verbrauchen (optimiert: ~8 Min statt 3 Min)
+                gameState.flashlightBattery -= 0.2 * delta; // 0.2% pro Sekunde
 
                 if (gameState.flashlightBattery <= 0) {
                     gameState.flashlightBattery = 0;
@@ -2407,12 +2435,12 @@
         }
 
         // ==========================================
-        // 9. SURVIVAL MECHANICS (Basic)
+        // 9. SURVIVAL MECHANICS (Balanced)
         // ==========================================
         function updateStats(delta) {
-            // Hunger & Durst sinken (basic rate für jetzt)
-            gameState.hunger -= 0.1 * delta;
-            gameState.thirst -= 0.15 * delta;
+            // Hunger & Durst sinken (optimiert: 30% langsamer für mehr Erkundungszeit)
+            gameState.hunger -= 0.07 * delta;  // ~23.8 Min (vorher 16.7 Min)
+            gameState.thirst -= 0.105 * delta; // ~15.9 Min (vorher 11.1 Min)
 
             // Clamp
             gameState.hunger = Math.max(0, gameState.hunger);
@@ -2458,10 +2486,22 @@
             animateItems(); // Rotiere Items
             checkNPCEncounter(); // Check NPC-Begegnungen
 
-            // FPS Counter
+            // FPS Counter mit visuellem Warning
             frameCount++;
             if (now - lastFPSUpdate > 1000) {
-                document.getElementById('fps').textContent = frameCount;
+                const fpsElement = document.getElementById('fps');
+                fpsElement.textContent = frameCount;
+
+                // Visuelles Feedback basierend auf FPS
+                fpsElement.className = ''; // Reset classes
+                if (frameCount >= 45) {
+                    fpsElement.classList.add('good'); // Grün: >=45 FPS
+                } else if (frameCount >= 30) {
+                    fpsElement.classList.add('warning'); // Orange: 30-44 FPS
+                } else {
+                    fpsElement.classList.add('critical'); // Rot blinkend: <30 FPS
+                }
+
                 frameCount = 0;
                 lastFPSUpdate = now;
             }

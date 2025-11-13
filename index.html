@@ -761,6 +761,10 @@
         let raycaster = new THREE.Raycaster();
         let interactableObject = null;
 
+        // NPC-System
+        let npcs = []; // Alle NPCs im Spiel
+        let npcMoveTimers = {}; // Timer für NPC-Bewegungen
+
         // Controls
         let joystickActive = false;
         let joystickVector = { x: 0, y: 0 };
@@ -1347,6 +1351,9 @@
                 document.getElementById('currentRoom').textContent = roomDef.name;
                 showRoomInfo(roomDef.name);
 
+                // Render NPCs im Raum
+                renderNPCsInRoom(roomId);
+
                 console.log(`Raum geladen: ${roomDef.name}`);
             };
 
@@ -1788,7 +1795,232 @@
         }
 
         // ==========================================
-        // 9. UI UPDATES
+        // 9. NPC-SYSTEM
+        // ==========================================
+
+        // NPC-Definitionen
+        const npcDefinitions = {
+            mother: {
+                name: 'Mutter',
+                emoji: '👩',
+                color: 0xFF69B4,
+                spawnRooms: ['kitchen', 'hallway', 'living'],
+                moveInterval: 2500, // ms (difficulty-abhängig)
+                catchChance: 0.6,
+                damage: 10,
+                punishment: 'locked_bedroom' // Sperrt zurück ins Schlafzimmer
+            },
+            father: {
+                name: 'Vater',
+                emoji: '👨',
+                color: 0x8B4513,
+                spawnRooms: ['living'],
+                moveInterval: 4000,
+                catchChance: 0.4,
+                damage: 999, // INSTANT GAME OVER!
+                punishment: 'game_over'
+            },
+            monster: {
+                name: 'Monster',
+                emoji: '👹',
+                color: 0x8B0000,
+                spawnRooms: ['basement'],
+                moveInterval: 2000,
+                catchChance: 0.8,
+                damage: 20,
+                punishment: 'locked_cage' // Sperrt in Käfig
+            }
+        };
+
+        // Erstelle NPC 3D-Objekt
+        function createNPC(npcType, roomId) {
+            const npcDef = npcDefinitions[npcType];
+            if (!npcDef) return null;
+
+            // NPC als große Box mit Emoji-Texture (simuliert)
+            const geometry = new THREE.BoxGeometry(0.6, 1.8, 0.6);
+            const material = new THREE.MeshLambertMaterial({
+                color: npcDef.color,
+                emissive: npcDef.color,
+                emissiveIntensity: 0.3
+            });
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.position.set(0, 0.9, 0); // Stehend
+
+            // UserData
+            mesh.userData.isNPC = true;
+            mesh.userData.npcType = npcType;
+            mesh.userData.npcName = npcDef.name;
+            mesh.userData.currentRoom = roomId;
+
+            return mesh;
+        }
+
+        // Spawn NPCs im Game
+        function spawnNPCs() {
+            npcs = []; // Reset
+            // Spawn Mutter in Küche
+            const mother = createNPC('mother', 'kitchen');
+            if (mother) npcs.push(mother);
+
+            // Spawn Vater in Wohnzimmer
+            const father = createNPC('father', 'living');
+            if (father) npcs.push(father);
+
+            // Spawn Monster in Keller
+            const monster = createNPC('monster', 'basement');
+            if (monster) npcs.push(monster);
+
+            console.log('NPCs spawned:', npcs.length);
+
+            // Start NPC-Movement AI
+            startNPCMovement();
+        }
+
+        // Render NPC im aktuellen Raum
+        function renderNPCsInRoom(roomId) {
+            npcs.forEach(npc => {
+                if (npc.userData.currentRoom === roomId) {
+                    // Füge NPC zur Scene hinzu
+                    const roomGroup = currentRoomObjects[0];
+                    if (roomGroup) {
+                        // Random Position im Raum
+                        const roomDef = roomDefinitions[roomId];
+                        const maxX = roomDef.boundaries.x - 1;
+                        const maxZ = roomDef.boundaries.z - 1;
+                        npc.position.set(
+                            (Math.random() - 0.5) * maxX * 2,
+                            0.9,
+                            (Math.random() - 0.5) * maxZ * 2
+                        );
+                        roomGroup.add(npc);
+                    }
+                }
+            });
+        }
+
+        // NPC-Bewegungs-AI
+        function startNPCMovement() {
+            npcs.forEach(npc => {
+                const npcType = npc.userData.npcType;
+                const npcDef = npcDefinitions[npcType];
+
+                // Timer für Bewegung (difficulty-abhängig später)
+                const moveInterval = npcDef.moveInterval;
+
+                npcMoveTimers[npcType] = setInterval(() => {
+                    moveNPC(npc);
+                }, moveInterval);
+            });
+        }
+
+        // Move NPC zu anderem Raum
+        function moveNPC(npc) {
+            const npcType = npc.userData.npcType;
+            const npcDef = npcDefinitions[npcType];
+            const currentRoom = npc.userData.currentRoom;
+
+            // 50% Chance sich zu bewegen
+            if (Math.random() > 0.5) return;
+
+            // Wähle random Raum aus spawn-Räumen
+            const possibleRooms = npcDef.spawnRooms;
+            const newRoom = possibleRooms[Math.floor(Math.random() * possibleRooms.length)];
+
+            // Wenn anderer Raum: bewegen
+            if (newRoom !== currentRoom) {
+                npc.userData.currentRoom = newRoom;
+                console.log(`${npcDef.name} moved to ${newRoom}`);
+
+                // Wenn Spieler im gleichen Raum: Re-render
+                if (gameState.currentRoom === newRoom) {
+                    loadRoom(gameState.currentRoom);
+                }
+            }
+        }
+
+        // Check NPC-Encounter (im Game Loop)
+        function checkNPCEncounter() {
+            npcs.forEach(npc => {
+                if (npc.userData.currentRoom === gameState.currentRoom) {
+                    // NPC ist im gleichen Raum!
+                    // Check Distanz zum Spieler
+                    const npcPos = npc.position;
+                    const playerPos = player.position;
+
+                    const distance = Math.sqrt(
+                        Math.pow(npcPos.x - playerPos.x, 2) +
+                        Math.pow(npcPos.z - playerPos.z, 2)
+                    );
+
+                    // Wenn nah genug: Encounter!
+                    if (distance < 2) {
+                        triggerNPCEncounter(npc);
+                    }
+                }
+            });
+        }
+
+        // Trigger NPC-Encounter
+        function triggerNPCEncounter(npc) {
+            const npcType = npc.userData.npcType;
+            const npcDef = npcDefinitions[npcType];
+
+            // Check Catch-Chance
+            const caught = Math.random() < npcDef.catchChance;
+
+            if (caught) {
+                console.log(`CAUGHT by ${npcDef.name}!`);
+
+                // Damage
+                gameState.health -= npcDef.damage;
+
+                // Punishment
+                if (npcDef.punishment === 'game_over') {
+                    gameOver(`${npcDef.name} hat dich erwischt!`);
+                } else if (npcDef.punishment === 'locked_bedroom') {
+                    // Teleport zurück ins Schlafzimmer und sperre Tür
+                    showMessage(`${npcDef.name} hat dich erwischt! -${npcDef.damage} HP`, 3000);
+                    setTimeout(() => {
+                        loadRoom('bedroom', true);
+                        // TODO: Tür wieder locked machen
+                    }, 1000);
+                } else if (npcDef.punishment === 'locked_cage') {
+                    // Teleport in Käfig
+                    showMessage(`${npcDef.name} hat dich erwischt! -${npcDef.damage} HP`, 3000);
+                    setTimeout(() => {
+                        loadRoom('cage', true);
+                        // Lock cage door
+                        // TODO: Implement
+                    }, 1000);
+                }
+
+                // Move NPC weg nach Encounter
+                const possibleRooms = npcDef.spawnRooms;
+                const newRoom = possibleRooms[Math.floor(Math.random() * possibleRooms.length)];
+                npc.userData.currentRoom = newRoom;
+
+            } else {
+                console.log(`Escaped from ${npcDef.name}!`);
+                showMessage(`${npcDef.name} hat dich fast erwischt!`, 2000);
+
+                // Move NPC weg
+                const possibleRooms = npcDef.spawnRooms;
+                const newRoom = possibleRooms[Math.floor(Math.random() * possibleRooms.length)];
+                npc.userData.currentRoom = newRoom;
+            }
+        }
+
+        // Stop NPC Movement (cleanup)
+        function stopNPCMovement() {
+            Object.keys(npcMoveTimers).forEach(key => {
+                clearInterval(npcMoveTimers[key]);
+            });
+            npcMoveTimers = {};
+        }
+
+        // ==========================================
+        // 10. UI UPDATES
         // ==========================================
         function updateUI() {
             // Stats Bars
@@ -1868,7 +2100,7 @@
         }
 
         // ==========================================
-        // 10. MAIN GAME LOOP
+        // 11. MAIN GAME LOOP
         // ==========================================
         let lastTime = performance.now();
 
@@ -1884,6 +2116,7 @@
             updateStats(delta);
             updateUI();
             animateItems(); // Rotiere Items
+            checkNPCEncounter(); // Check NPC-Begegnungen
 
             // FPS Counter
             frameCount++;
@@ -1898,7 +2131,7 @@
         }
 
         // ==========================================
-        // 11. INITIALIZATION
+        // 12. INITIALIZATION
         // ==========================================
         function init() {
             console.log('Initializing Dark Escape House...');
@@ -1906,6 +2139,7 @@
             initThree();
             setupControls();
             setupInventoryListeners();
+            spawnNPCs(); // Spawn alle NPCs
             loadRoom('bedroom'); // Start im Schlafzimmer
 
             // Hide Loading Screen
